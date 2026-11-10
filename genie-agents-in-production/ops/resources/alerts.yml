@@ -1,0 +1,59 @@
+# Fleet alerts over the central ops views. Each fires to the deploying user; point
+# subscriptions at a team destination in a real deployment.
+resources:
+  alerts:
+    benchmark_below_threshold:
+      display_name: "Genie fleet: benchmark pass rate below 80%"
+      warehouse_id: ${var.warehouse_id}
+      query_text: |
+        SELECT COUNT(*) AS agents_below FROM ${var.ops_catalog}.${var.ops_schema}.v_fleet_scorecard
+        WHERE target = 'prod' AND pass_rate < 0.8
+      evaluation:
+        source: {name: agents_below, display: agents_below}
+        comparison_operator: GREATER_THAN
+        threshold: {value: {double_value: 0}}
+        notification:
+          subscriptions: [{user_email: "${workspace.current_user.userName}"}]
+      schedule: {quartz_cron_schedule: "0 30 6 * * ?", timezone_id: UTC, pause_status: PAUSED}
+
+    thumbs_down_spike:
+      display_name: "Genie fleet: thumbs-down rate above 25%"
+      warehouse_id: ${var.warehouse_id}
+      query_text: |
+        SELECT COUNT(*) AS agents_flagged FROM ${var.ops_catalog}.${var.ops_schema}.v_fleet_scorecard
+        WHERE thumbs_down_rate_7d > 0.25
+      evaluation:
+        source: {name: agents_flagged, display: agents_flagged}
+        comparison_operator: GREATER_THAN
+        threshold: {value: {double_value: 0}}
+        notification:
+          subscriptions: [{user_email: "${workspace.current_user.userName}"}]
+      schedule: {quartz_cron_schedule: "0 0 * * * ?", timezone_id: UTC, pause_status: PAUSED}
+
+    prod_edited_outside_pipeline:
+      display_name: "Genie fleet: prod agent edited outside the pipeline"
+      warehouse_id: ${var.warehouse_id}
+      query_text: |
+        SELECT COUNT(*) AS edits FROM ${var.ops_catalog}.${var.ops_schema}.v_prod_edits_outside_pipeline
+        WHERE event_time >= current_timestamp() - INTERVAL 1 HOUR
+      evaluation:
+        source: {name: edits, display: edits}
+        comparison_operator: GREATER_THAN
+        threshold: {value: {double_value: 0}}
+        notification:
+          subscriptions: [{user_email: "${workspace.current_user.userName}"}]
+      schedule: {quartz_cron_schedule: "0 0 * * * ?", timezone_id: UTC, pause_status: PAUSED}
+
+    sql_failure_spike:
+      display_name: "Genie fleet: SQL failure rate above 10%"
+      warehouse_id: ${var.warehouse_id}
+      query_text: |
+        SELECT COUNT(*) AS agents_flagged FROM ${var.ops_catalog}.${var.ops_schema}.v_fleet_scorecard
+        WHERE sql_failure_rate_7d > 0.1
+      evaluation:
+        source: {name: agents_flagged, display: agents_flagged}
+        comparison_operator: GREATER_THAN
+        threshold: {value: {double_value: 0}}
+        notification:
+          subscriptions: [{user_email: "${workspace.current_user.userName}"}]
+      schedule: {quartz_cron_schedule: "0 0 * * * ?", timezone_id: UTC, pause_status: PAUSED}

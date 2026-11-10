@@ -1,0 +1,64 @@
+python3 scripts/lint_agent.py && databricks bundle validate -t prod
+[OK  ] taxi_agent (taxi_agent.genie.yml)
+Name: genie_agents_in_production
+Target: prod
+Workspace:
+  User: <you>
+  Path: /Workspace/Users/<you>/.bundle/genie_agents_in_production/prod
+
+Validation OK!
+databricks bundle deploy -t prod
+Uploading bundle files to /Workspace/Users/<you>/.bundle/genie_agents_in_production/prod/files...
+Created sql_warehouses.genie_wh
+Created sql_warehouses.genie_wh.permissions
+Updated genie_spaces.taxi_agent
+Created jobs.build_context
+Files: 42 uploaded, 2 deleted
+Resources: 3 created, 1 changed, 0 deleted, 1 unchanged
+databricks bundle run build_context -t prod
+Run URL: <run-url>
+
+2026-11-10 06:43:47 "genie-agents-build-context-prod" RUNNING
+2026-11-10 06:44:04 "genie-agents-build-context-prod" TERMINATED SUCCESS
+Output:
+=======
+Task tables:
+SQL Task Output:
+{}
+=======
+Task metric_views:
+SQL Task Output:
+{}
+python3 scripts/smoke_test.py -t prod
+Smoke test: target=prod space=<id>
+  Q: How many trips are there in total?
+  status: COMPLETED
+  SQL: SELECT MEASURE(`trip_count`) AS `total_trips`
+  A: There are **21,932** total trips.
+SMOKE TEST PASSED
+python3 scripts/benchmark_gate.py -t prod --threshold 0.8
+Benchmark gate: target=prod space=<id> threshold=80%
+  eval run <id>: RUNNING 0/10 done, 0 correct
+  eval run <id>: RUNNING 0/10 done, 0 correct
+  eval run <id>: RUNNING 1/10 done, 1 correct
+  eval run <id>: RUNNING 2/10 done, 2 correct
+  eval run <id>: RUNNING 3/10 done, 3 correct
+  eval run <id>: RUNNING 4/10 done, 4 correct
+  eval run <id>: RUNNING 5/10 done, 5 correct
+  eval run <id>: RUNNING 6/10 done, 6 correct
+  eval run <id>: RUNNING 7/10 done, 7 correct
+  eval run <id>: RUNNING 8/10 done, 8 correct
+  eval run <id>: RUNNING 9/10 done, 9 correct
+  eval run <id>: DONE 10/10 done, 10 correct
+  [PASS  ] What is the total revenue?
+  [PASS  ] What is the average trip distance in miles?
+  [PASS  ] What is the average fare?
+  [PASS  ] How many trips are there in total?
+  [PASS  ] What is the busiest dropoff ZIP?
+  [PASS  ] How many trips were there per day?
+  [PASS  ] What are the top 5 pickup ZIPs by revenue?
+  [PASS  ] What is the average fare by pickup hour?
+  [PASS  ] Which hour of the day has the most trips?
+  [PASS  ] How many trips started in ZIP 10001?
+Pass rate 100% (10/10), 0 need review
+GATE PASSED

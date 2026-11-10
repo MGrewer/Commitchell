@@ -1,0 +1,941 @@
+{
+  "datasets": [
+    {
+      "name": "scorecard",
+      "displayName": "Scorecard",
+      "queryLines": [
+        "SELECT title AS agent, domain, owner, status, pass_rate, questions_7d, thumbs_down_rate_7d, sql_failure_rate_7d, last_run_ts, is_synthetic FROM v_fleet_scorecard WHERE target = 'prod'"
+      ]
+    },
+    {
+      "name": "kpis",
+      "displayName": "Kpis",
+      "queryLines": [
+        "SELECT COUNT_IF(managed_as_code) AS managed, COUNT_IF(NOT managed_as_code) AS unmanaged, (SELECT COUNT_IF(status = 'Needs attention') FROM v_fleet_scorecard WHERE target = 'prod') AS needs_attention, (SELECT AVG(pass_rate) FROM v_fleet_scorecard WHERE target = 'prod') AS avg_pass_rate FROM v_agent_coverage"
+      ]
+    },
+    {
+      "name": "bench_trend",
+      "displayName": "Bench Trend",
+      "queryLines": [
+        "SELECT title AS agent, DATE(run_ts) AS day, AVG(pass_rate) AS pass_rate FROM v_benchmark_trend WHERE target = 'prod' GROUP BY ALL"
+      ]
+    },
+    {
+      "name": "feedback_trend",
+      "displayName": "Feedback Trend",
+      "queryLines": [
+        "SELECT title AS agent, day, thumbs_down_rate, questions FROM v_feedback_daily WHERE day >= current_date() - 30"
+      ]
+    },
+    {
+      "name": "review_queue",
+      "displayName": "Review Queue",
+      "queryLines": [
+        "SELECT title AS agent, question, COUNT(*) AS times_thumbed_down, MAX(message_ts) AS last_seen FROM v_review_queue GROUP BY ALL"
+      ]
+    },
+    {
+      "name": "coverage",
+      "displayName": "Coverage",
+      "queryLines": [
+        "SELECT agent, CASE WHEN managed_as_code THEN 'Managed as code' ELSE 'Not managed' END AS management, queries_30d FROM v_agent_coverage"
+      ]
+    },
+    {
+      "name": "sql_health",
+      "displayName": "Sql Health",
+      "queryLines": [
+        "SELECT title AS agent, SUM(queries) AS queries, SUM(failed_queries) AS failed, TRY_DIVIDE(SUM(failed_queries), SUM(queries)) AS failure_rate, AVG(p50_ms) AS p50_ms, SUM(warehouse_task_hours) AS warehouse_task_hours FROM v_sql_health WHERE title IS NOT NULL GROUP BY ALL"
+      ]
+    },
+    {
+      "name": "edits",
+      "displayName": "Edits",
+      "queryLines": [
+        "SELECT event_time, title AS agent, edited_by, action_name FROM v_prod_edits_outside_pipeline"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "fleet",
+      "displayName": "Agent Fleet Health",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layout": [
+        {
+          "widget": {
+            "name": "hdr",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Agent Fleet Health\n",
+                "Every Genie agent, one view: benchmarks, feedback, SQL health, and changes outside the pipeline. Rows flagged `is_synthetic` are seeded demo history; the Taxi Trips agent is live.\n"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "k_managed",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpis",
+                  "disaggregated": true,
+                  "fields": [
+                    {
+                      "name": "managed",
+                      "expression": "`managed`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Managed as code",
+                  "fields": []
+                },
+                "showDescription": true,
+                "description": {
+                  "value": "Agents deployed through the pipeline.",
+                  "fields": []
+                }
+              },
+              "encodings": {
+                "value": {
+                  "fieldName": "managed",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 1,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_unmanaged",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpis",
+                  "disaggregated": true,
+                  "fields": [
+                    {
+                      "name": "unmanaged",
+                      "expression": "`unmanaged`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Not managed",
+                  "fields": []
+                },
+                "showDescription": true,
+                "description": {
+                  "value": "Agents in use that are not in the registry.",
+                  "fields": []
+                }
+              },
+              "encodings": {
+                "value": {
+                  "fieldName": "unmanaged",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 1,
+            "y": 2,
+            "width": 1,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_attention",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpis",
+                  "disaggregated": true,
+                  "fields": [
+                    {
+                      "name": "needs_attention",
+                      "expression": "`needs_attention`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Needs attention",
+                  "fields": []
+                },
+                "showDescription": true,
+                "description": {
+                  "value": "Pass rate under 80% or thumbs-down over 25%.",
+                  "fields": []
+                }
+              },
+              "encodings": {
+                "value": {
+                  "fieldName": "needs_attention",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "k_pass",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpis",
+                  "disaggregated": true,
+                  "fields": [
+                    {
+                      "name": "avg_pass_rate",
+                      "expression": "`avg_pass_rate`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Avg benchmark pass rate",
+                  "fields": []
+                },
+                "showDescription": true,
+                "description": {
+                  "value": "Latest run per prod agent.",
+                  "fields": []
+                }
+              },
+              "encodings": {
+                "value": {
+                  "fieldName": "avg_pass_rate",
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "t_scorecard",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "scorecard",
+                  "disaggregated": true,
+                  "fields": [
+                    {
+                      "name": "agent",
+                      "expression": "`agent`"
+                    },
+                    {
+                      "name": "domain",
+                      "expression": "`domain`"
+                    },
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    },
+                    {
+                      "name": "pass_rate",
+                      "expression": "`pass_rate`"
+                    },
+                    {
+                      "name": "questions_7d",
+                      "expression": "`questions_7d`"
+                    },
+                    {
+                      "name": "thumbs_down_rate_7d",
+                      "expression": "`thumbs_down_rate_7d`"
+                    },
+                    {
+                      "name": "sql_failure_rate_7d",
+                      "expression": "`sql_failure_rate_7d`"
+                    },
+                    {
+                      "name": "owner",
+                      "expression": "`owner`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Fleet scorecard",
+                  "fields": []
+                },
+                "showDescription": true,
+                "description": {
+                  "value": "One row per prod agent.",
+                  "fields": []
+                }
+              },
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "agent",
+                    "displayName": "Agent"
+                  },
+                  {
+                    "fieldName": "domain",
+                    "displayName": "Domain"
+                  },
+                  {
+                    "fieldName": "status",
+                    "displayName": "Status"
+                  },
+                  {
+                    "fieldName": "pass_rate",
+                    "displayName": "Pass rate",
+                    "format": {
+                      "type": "number-percent",
+                      "decimalPlaces": {
+                        "type": "max",
+                        "places": 0
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "questions_7d",
+                    "displayName": "Questions (7d)",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "compact",
+                      "decimalPlaces": {
+                        "type": "max",
+                        "places": 0
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "thumbs_down_rate_7d",
+                    "displayName": "Thumbs-down (7d)",
+                    "format": {
+                      "type": "number-percent",
+                      "decimalPlaces": {
+                        "type": "max",
+                        "places": 0
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "sql_failure_rate_7d",
+                    "displayName": "SQL failures (7d)",
+                    "format": {
+                      "type": "number-percent",
+                      "decimalPlaces": {
+                        "type": "max",
+                        "places": 0
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "owner",
+                    "displayName": "Owner"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "l_bench",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "bench_trend",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "name": "day",
+                      "expression": "`day`"
+                    },
+                    {
+                      "name": "avg(pass_rate)",
+                      "expression": "AVG(`pass_rate`)"
+                    },
+                    {
+                      "name": "agent",
+                      "expression": "`agent`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Benchmark pass rate",
+                  "fields": []
+                },
+                "showDescription": true,
+                "description": {
+                  "value": "Nightly, on deploy, and on upstream table change.",
+                  "fields": []
+                }
+              },
+              "encodings": {
+                "x": {
+                  "fieldName": "day",
+                  "scale": {
+                    "type": "temporal"
+                  },
+                  "axis": {
+                    "title": "Day"
+                  }
+                },
+                "y": {
+                  "fieldName": "avg(pass_rate)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "axis": {
+                    "title": "Benchmark pass rate"
+                  },
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 0
+                    }
+                  }
+                },
+                "color": {
+                  "fieldName": "agent",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 11,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "l_fb",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "feedback_trend",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "name": "day",
+                      "expression": "`day`"
+                    },
+                    {
+                      "name": "avg(thumbs_down_rate)",
+                      "expression": "AVG(`thumbs_down_rate`)"
+                    },
+                    {
+                      "name": "agent",
+                      "expression": "`agent`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Thumbs-down rate",
+                  "fields": []
+                },
+                "showDescription": true,
+                "description": {
+                  "value": "Share of rated answers rated thumbs-down, per day.",
+                  "fields": []
+                }
+              },
+              "encodings": {
+                "x": {
+                  "fieldName": "day",
+                  "scale": {
+                    "type": "temporal"
+                  },
+                  "axis": {
+                    "title": "Day"
+                  }
+                },
+                "y": {
+                  "fieldName": "avg(thumbs_down_rate)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "axis": {
+                    "title": "Thumbs-down rate"
+                  },
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 0
+                    }
+                  }
+                },
+                "color": {
+                  "fieldName": "agent",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 11,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "t_review",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "review_queue",
+                  "disaggregated": true,
+                  "fields": [
+                    {
+                      "name": "agent",
+                      "expression": "`agent`"
+                    },
+                    {
+                      "name": "question",
+                      "expression": "`question`"
+                    },
+                    {
+                      "name": "times_thumbed_down",
+                      "expression": "`times_thumbed_down`"
+                    },
+                    {
+                      "name": "last_seen",
+                      "expression": "`last_seen`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Review queue (last 14 days)",
+                  "fields": []
+                },
+                "showDescription": true,
+                "description": {
+                  "value": "Thumbs-down questions: candidates for new benchmarks or instruction fixes, via pull request.",
+                  "fields": []
+                }
+              },
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "agent",
+                    "displayName": "Agent"
+                  },
+                  {
+                    "fieldName": "question",
+                    "displayName": "Question"
+                  },
+                  {
+                    "fieldName": "times_thumbed_down",
+                    "displayName": "Thumbs-down",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "compact",
+                      "decimalPlaces": {
+                        "type": "max",
+                        "places": 0
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "last_seen",
+                    "displayName": "Last seen"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 17,
+            "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "t_coverage",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "coverage",
+                  "disaggregated": true,
+                  "fields": [
+                    {
+                      "name": "agent",
+                      "expression": "`agent`"
+                    },
+                    {
+                      "name": "management",
+                      "expression": "`management`"
+                    },
+                    {
+                      "name": "queries_30d",
+                      "expression": "`queries_30d`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Coverage",
+                  "fields": []
+                },
+                "showDescription": true,
+                "description": {
+                  "value": "Every agent seen in the inventory or in system.query.history. Unmanaged agents are shown by id only.",
+                  "fields": []
+                }
+              },
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "agent",
+                    "displayName": "Agent"
+                  },
+                  {
+                    "fieldName": "management",
+                    "displayName": "Management"
+                  },
+                  {
+                    "fieldName": "queries_30d",
+                    "displayName": "SQL queries (30d)",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "compact",
+                      "decimalPlaces": {
+                        "type": "max",
+                        "places": 0
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 24,
+            "width": 3,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "t_sql",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "sql_health",
+                  "disaggregated": true,
+                  "fields": [
+                    {
+                      "name": "agent",
+                      "expression": "`agent`"
+                    },
+                    {
+                      "name": "queries",
+                      "expression": "`queries`"
+                    },
+                    {
+                      "name": "failure_rate",
+                      "expression": "`failure_rate`"
+                    },
+                    {
+                      "name": "p50_ms",
+                      "expression": "`p50_ms`"
+                    },
+                    {
+                      "name": "warehouse_task_hours",
+                      "expression": "`warehouse_task_hours`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "SQL health (30d)",
+                  "fields": []
+                },
+                "showDescription": true,
+                "description": {
+                  "value": "From system.query.history. Warehouse time is a proxy for per-agent cost; billing does not split Genie spend by agent.",
+                  "fields": []
+                }
+              },
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "agent",
+                    "displayName": "Agent"
+                  },
+                  {
+                    "fieldName": "queries",
+                    "displayName": "Queries",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "compact",
+                      "decimalPlaces": {
+                        "type": "max",
+                        "places": 0
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "failure_rate",
+                    "displayName": "Failure rate",
+                    "format": {
+                      "type": "number-percent",
+                      "decimalPlaces": {
+                        "type": "max",
+                        "places": 0
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "p50_ms",
+                    "displayName": "p50 ms",
+                    "format": {
+                      "type": "number-plain",
+                      "abbreviation": "compact",
+                      "decimalPlaces": {
+                        "type": "max",
+                        "places": 0
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "warehouse_task_hours",
+                    "displayName": "Warehouse task hrs"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 24,
+            "width": 3,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "t_edits",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "edits",
+                  "disaggregated": true,
+                  "fields": [
+                    {
+                      "name": "event_time",
+                      "expression": "`event_time`"
+                    },
+                    {
+                      "name": "agent",
+                      "expression": "`agent`"
+                    },
+                    {
+                      "name": "edited_by",
+                      "expression": "`edited_by`"
+                    },
+                    {
+                      "name": "action_name",
+                      "expression": "`action_name`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Prod edits outside the pipeline (30d)",
+                  "fields": []
+                },
+                "showDescription": true,
+                "description": {
+                  "value": "From system.access.audit. Should be empty.",
+                  "fields": []
+                }
+              },
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "event_time",
+                    "displayName": "When"
+                  },
+                  {
+                    "fieldName": "agent",
+                    "displayName": "Agent"
+                  },
+                  {
+                    "fieldName": "edited_by",
+                    "displayName": "Edited by"
+                  },
+                  {
+                    "fieldName": "action_name",
+                    "displayName": "Action"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 31,
+            "width": 6,
+            "height": 5
+          }
+        }
+      ]
+    }
+  ]
+}

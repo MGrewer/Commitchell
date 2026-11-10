@@ -1,0 +1,14 @@
+# The SQL warehouse the agent runs on. One per target, created and sized by the bundle.
+resources:
+  sql_warehouses:
+    genie_wh:
+      name: genie-agents-${bundle.target}
+      cluster_size: 2X-Small
+      warehouse_type: PRO
+      enable_serverless_compute: true
+      auto_stop_mins: 10
+      min_num_clusters: 1
+      max_num_clusters: 1
+      permissions:
+        - level: CAN_USE
+          group_name: ${var.consumer_group}

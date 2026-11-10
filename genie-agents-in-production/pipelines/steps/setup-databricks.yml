@@ -1,0 +1,12 @@
+steps:
+  - task: AzureCLI@2
+    displayName: Databricks CLI + federated SP auth
+    inputs:
+      azureSubscription: databricks-genie-sc   # service connection (workload identity federation)
+      scriptType: bash
+      addSpnToEnvironment: true
+      scriptLocation: inlineScript
+      inlineScript: |
+        curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+        pip install --index-url "$(PIP_INDEX_URL)" databricks-sdk==0.108.0
+        echo "##vso[task.setvariable variable=DATABRICKS_AUTH_TYPE]azure-cli"

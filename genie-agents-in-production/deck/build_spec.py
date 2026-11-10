@@ -1,0 +1,160 @@
+"""Write deck/deck_spec.json for the talk. Usage: python3 deck/build_spec.py [--account "Name"] [--out path]
+
+The committed spec uses a neutral audience name; pass --account for a customer build
+(write that copy outside the repo).
+"""
+import argparse
+import json
+import pathlib
+
+p = argparse.ArgumentParser()
+p.add_argument("--account", default="your team")
+p.add_argument("--forbid", action="append", default=[], help="name that must not appear in the deck (repeatable)")
+p.add_argument("--out", default=str(pathlib.Path(__file__).with_name("deck_spec.json")))
+a = p.parse_args()
+
+
+def n(purpose, talk, evidence, transition, question):
+    return {"purpose": purpose, "talk_track": talk, "evidence": evidence, "transition": transition,
+            "likely_question": question}
+
+
+slides = [
+    {"id": "title", "layout": "title", "title": "Genie Agents in Production",
+     "subtitle": "CI/CD and observability for {{account.name}}",
+     "notes": n("Set the frame for the hour.",
+                "Everything today is about what happens after you build a good agent: getting it to prod safely, and keeping it good once people depend on it. All of it is live in a workspace, not slides.",
+                ["Live demo workspace built for this session"],
+                "Here is how the hour breaks down.",
+                "Is this all generally available? Mostly; I will call out the Beta pieces as we go.")},
+    {"id": "agenda", "layout": "content_basic", "title": "The hour", "bullets": True,
+     "body": "Part 1: Genie agents as code (about 30 minutes)\nPart 2: Running a fleet of agents (about 30 minutes)\nLive demo in both parts, then questions\nThe afternoon builds the agent; this hour is what good looks like after",
+     "notes": n("Agenda and how it connects to the rest of the day.",
+                "We go first so you see the end state. This afternoon you build an agent, write benchmarks and a metric view. Those are exactly the pieces this pipeline promotes and watches.",
+                ["Workshop agenda"],
+                "Start with the agent itself.",
+                "Can we use this pipeline for the agent we build later? Yes, same steps.")},
+    {"id": "part1", "layout": "section_break_1", "title": "Part 1: Genie agents as code",
+     "notes": n("Section break.", "First half: how an agent moves from dev to prod.", ["Section marker"],
+                "What actually is an agent, from a deployment point of view?", "None expected.")},
+    {"id": "two-halves", "layout": "content_2col", "title": "An agent has two halves",
+     "columns": ["The agent definition",
+                 "Tables and metric views it uses\nInstructions and example SQL\nSample questions\nBenchmarks",
+                 "The context it reads",
+                 "Metric views in Unity Catalog\nTable and column descriptions\nTags\nPermissions on the data"],
+     "notes": n("Most teams version only the left side. Both sides change answers.",
+                "Open the dev agent and show both halves. If prod gets a new instruction but not the metric view change it depends on, prod answers differently from dev. So both halves have to move together, through the same pipeline.",
+                ["Live: dev agent in the demo workspace"],
+                "So what moves, and what changes per environment?",
+                "Where do metric views live? In Unity Catalog, next to the tables. The agent just points at them.")},
+    {"id": "what-moves", "layout": "content_basic", "title": "What moves, what changes per environment",
+     "table": {"data": [["Piece", "Dev to prod", "How"],
+                        ["Genie agent", "Promoted", "Bundle resource (genie_spaces)"],
+                        ["SQL warehouse", "One per environment", "Bundle resource (sql_warehouses)"],
+                        ["Tables and metric views", "Promoted", "SQL files, run by a bundle job"],
+                        ["Catalog and schema", "Already exist", "Bundle variables point at them"],
+                        ["Who can use it", "Per environment", "Users can chat; only the pipeline can edit"]],
+               "y": 1.7, "width": 11.5, "height": 3.6},
+     "notes": n("The mental model for promotion.",
+                "Three kinds of things in one bundle. Resources are what the bundle creates and owns: the agent, the warehouse, the job. SQL is what the job runs: the tables and metric views. Variables are what change per environment: which catalog and schema. The catalogs and schemas already exist; your platform team owns those. Bundles are the recommended path; the APIs and Terraform work too, but you end up writing the plumbing yourself.",
+                ["databricks.yml in the demo repo"],
+                "Here is the pipeline that does the promotion.",
+                "Can the catalog name differ per environment? Yes, that is exactly what the variables are for.")},
+    {"id": "code-tree", "layout": "content_basic", "title": "What's in the bundle", "kind": "Overview",
+     "code": [['genie-agents-in-production/', 'databricks.yml                 # variables and targets\nresources/\n  warehouse.yml                # resource: SQL warehouse\n  build_context.job.yml        # resource: job that runs the SQL\n  taxi_agent.genie.yml         # resource: the Genie agent\nsrc/sql/\n  01_tables.sql                # SQL: tables\n  02_metric_views.sql          # SQL: metric views']],
+     "caption": 'Resources: the bundle creates and owns them. SQL: a job runs it. Variables: what changes per environment.',
+     "notes": n('Orient them in the repo before the snippets.', 'Three kinds of files. Resources are objects the bundle creates and keeps in sync: the warehouse, the job, the agent. SQL is DDL that the job runs, because bundles have no table or metric view resource. Variables are the per-environment values. Catalogs and schemas are not in here; they already exist.', ['Demo repo, genie-agents-in-production folder'], 'Start with the variables.', 'Why not a table resource? Bundles do not have one; tables come from your pipelines or, as here, SQL a job runs.')},
+    {"id": "code-vars", "layout": "content_basic", "title": "Variables per environment", "kind": "Variables",
+     "code": [['databricks.yml', "variables:\n  catalog:\n    description: Catalog holding the agent's data\n  schema:\n    description: Schema holding the agent's data\n  consumer_group:\n    default: users\n\ntargets:\n  dev:\n    mode: development\n    variables: {schema: genie_demo_dev}\n  prod:\n    mode: production\n    variables: {schema: genie_demo_prod}"], ['Overriding at deploy time', '# In a pipeline, override at deploy time:\ndatabricks bundle deploy -t prod \\\n  --var catalog=analytics\n\n# Or per machine, not committed:\n# .databricks/bundle/prod/variable-overrides.json\n{"catalog": "analytics"}\n\n# A catalog per environment works the same\n# way: set catalog per target instead.']],
+     "caption": '${var.schema} anywhere in the bundle becomes genie_demo_dev or genie_demo_prod, depending on the target.',
+     "notes": n('Variables are the only thing that differs between dev and prod.', 'One set of files, two targets. This demo promotes between two schemas in one catalog; a catalog per environment is the same variable, set per target. A pipeline can override with --var, and a developer can keep local values in a file that is not committed.', ['databricks.yml in the demo repo'], 'Now the resources, starting with the warehouse.', 'Can targets be different workspaces? Yes, add a workspace host per target; same files.')},
+    {"id": "code-wh", "layout": "content_basic", "title": "Resource: the SQL warehouse", "kind": "Resource",
+     "code": [['resources/warehouse.yml', 'resources:\n  sql_warehouses:\n    genie_wh:\n      name: genie-agents-${bundle.target}\n      cluster_size: 2X-Small\n      warehouse_type: PRO\n      enable_serverless_compute: true\n      auto_stop_mins: 10\n      max_num_clusters: 1\n      permissions:\n        - level: CAN_USE\n          group_name: ${var.consumer_group}']],
+     "caption": 'One warehouse per target, sized and permissioned in code. Other resources reference it as ${resources.sql_warehouses.genie_wh.id}.',
+     "notes": n("The agent's compute is part of the deployment.", "Each environment gets its own small serverless warehouse with auto stop. Users get CAN_USE so the agent can run their queries. Nobody clicks this together in the UI, and prod's warehouse is the same shape as dev's.", ['resources/warehouse.yml'], 'The tables and metric views come next, as SQL.', 'Can we share one warehouse across agents? Yes; reference an existing one with a variable instead of a resource.')},
+    {"id": "code-sql", "layout": "content_basic", "title": "SQL: tables and metric views", "kind": "SQL",
+     "code": [['src/sql/01_tables.sql', "USE CATALOG IDENTIFIER(:catalog);\nUSE SCHEMA IDENTIFIER(:schema);\n\nCREATE TABLE IF NOT EXISTS trips\nCOMMENT 'NYC taxi trips. One row per trip.'\nAS SELECT * FROM samples.nyctaxi.trips;\n\nALTER TABLE trips ALTER COLUMN fare_amount\n  COMMENT 'Fare in USD.';"], ['src/sql/02_metric_views.sql', 'USE CATALOG IDENTIFIER(:catalog);\nUSE SCHEMA IDENTIFIER(:schema);\n\nCREATE OR REPLACE VIEW trip_metrics\nWITH METRICS LANGUAGE YAML AS $$\nversion: 1.1\nsource: trips\ndimensions:\n  - name: pickup_zip\n    expr: pickup_zip\nmeasures:\n  - name: total_revenue\n    expr: SUM(fare_amount)\n$$;']],
+     "caption": ':catalog and :schema are SQL parameters the job passes in. The same files build dev and prod.',
+     "notes": n('Tables and metric views are DDL, versioned next to the agent.', 'Bundles have no metric view resource, so the definition lives as SQL. Notice the source is just trips: after USE CATALOG and USE SCHEMA, the same file works in any environment. In a real project the tables come from your pipelines; the metric view usually lives here with the agent.', ['src/sql in the demo repo'], 'A job runs these files.', 'Why parameters and not ${var.catalog}? The SQL file is uploaded as-is; the job passes the values as parameters.')},
+    {"id": "code-job", "layout": "content_basic", "title": "Resource: the job that runs the SQL", "kind": "Resource",
+     "code": [['resources/build_context.job.yml', 'resources:\n  jobs:\n    build_context:\n      tasks:\n        - task_key: tables\n          sql_task:\n            warehouse_id: ${resources.sql_warehouses.genie_wh.id}\n            file:\n              path: ../src/sql/01_tables.sql\n            parameters:\n              catalog: ${var.catalog}\n              schema: ${var.schema}\n        - task_key: metric_views\n          depends_on: [{task_key: tables}]\n          sql_task: ...   # same, 02_metric_views.sql']],
+     "caption": 'Variables flow into SQL as job parameters. Tables run first, then metric views.',
+     "notes": n('How the SQL gets applied in each environment.', "The job is a bundle resource, so it deploys with everything else. It runs on the bundle's warehouse and passes the target's catalog and schema into the SQL. The pipeline runs it right after deploy.", ['resources/build_context.job.yml'], 'Last, the agent itself.', 'Could this be a Lakeflow pipeline instead? Yes, if your tables are built by one already.')},
+    {"id": "code-agent", "layout": "content_basic", "title": "Resource: the Genie agent", "kind": "Resource",
+     "code": [['resources/taxi_agent.genie.yml', 'resources:\n  genie_spaces:\n    taxi_agent:\n      title: Taxi Trips\n      warehouse_id: ${resources.sql_warehouses.genie_wh.id}\n      permissions:\n        - level: CAN_RUN\n          group_name: ${var.consumer_group}\n      serialized_space: {\n        "data_sources": {"tables": [\n          {"identifier": "${var.catalog}.${var.schema}.trip_metrics"},\n          {"identifier": "${var.catalog}.${var.schema}.trips"}\n        ]},\n        "instructions": { ... },\n        "benchmarks":   { ... }\n      }']],
+     "caption": 'The whole agent definition is inline, so ${var.catalog} resolves inside it. Users get CAN_RUN; only the pipeline can edit.',
+     "notes": n('The agent is code, and it points at the variables and the warehouse.', "The definition is exported from the dev agent, then the catalog and schema are replaced with variables. It has to be inline in the YAML; variables do not resolve in a separate JSON file. It references the bundle's warehouse by resource id.", ['resources/taxi_agent.genie.yml, generated by make pull'], 'Now the pipeline that ties it together.', 'How do UI edits get back into this file? make pull exports the dev agent and rewrites it with variables.')},
+    {"id": "pipeline", "layout": "content_basic", "title": "The pipeline: five steps", "bullets": True,
+     "body": "Standards check: description, benchmarks, instructions, a metric view, no hardcoded names\nDeploy the bundle: warehouse, job, agent\nRun the job: tables, then metric views\nSmoke test: ask prod one real question\nBenchmark gate: run the benchmarks, stop below 80% (Beta API)",
+     "notes": n("The core of Part 1.",
+                "Show the Azure DevOps pipeline file, then run the same steps from the terminal: make release T=prod. Then the bad-change beat: add 'always exclude trips under 1 mile', which sounds reasonable. The gate drops to 50% and stops the release. Revert, and it passes.",
+                ["Live: make release T=prod", "Fallback: captured output in the repo's docs folder"],
+                "A few things we learned building this.",
+                "Does the benchmark gate cost much? It runs the benchmark questions on your warehouse, so a few minutes of warehouse time.")},
+    {"id": "lessons", "layout": "content_basic", "title": "Four things worth knowing", "bullets": True,
+     "body": "Put the agent definition inline in the bundle so variables resolve\nCreate metric views before the agent; Genie rejects missing tables\nDeploy into a restricted folder, not Shared, or everyone can edit prod\nBusiness logic in a metric view protects answers from bad prompt edits",
+     "notes": n("Practical gotchas from building the demo, so they skip the trial and error.",
+                "Each of these we hit ourselves. The last one is the best argument for metric views: an instruction saying fares are stored in cents changed nothing, because Genie used the governed measure.",
+                ["Tested on Databricks CLI 1.21, November 2026"],
+                "That gets one agent to prod. Now imagine fifty.",
+                "Does bundle generate work for pulling UI edits? Yes, the repo has a make pull that turns UI edits into a clean diff.")},
+    {"id": "part2", "layout": "section_break_1", "title": "Part 2: Running a fleet of agents",
+     "notes": n("Section break.", "Second half: keeping many agents healthy.", ["Section marker"],
+                "What changes when it is many agents, not one?", "None expected.")},
+    {"id": "one-vs-platform", "layout": "content_basic", "title": "One developer vs the platform",
+     "table": {"data": [["One developer, one agent", "The platform, every agent"],
+                        ["Runs benchmarks when they remember", "Benchmarks on every deploy, nightly, and when data changes"],
+                        ["Reads thumbs-down in one agent", "Feedback from every agent in one place, with alerts"],
+                        ["Knows their own agent's tables", "Knows which agents to re-test when a shared table changes"],
+                        ["Follows standards by habit", "Standards checked before anything deploys"],
+                        ["Can't see agents nobody manages", "An inventory of every agent, managed or not"]],
+               "y": 1.7, "width": 11.5, "height": 3.8},
+     "notes": n("The thesis of the hour: best practices make one agent good; the platform keeps fifty good.",
+                "Everything this afternoon is a best practice for one developer. None of it tells you which of your agents got worse last night. That is what this half is about.",
+                ["Demo repo README"],
+                "Here are the signals you already have.",
+                "Who owns the platform side? Usually the same team that owns the pipeline. One ops setup watches every agent team's agents.")},
+    {"id": "signals", "layout": "content_3col", "title": "Signals you already have",
+     "columns": ["Benchmarks", "Run by API on a schedule\nResults stored centrally\n(Beta)",
+                 "Feedback", "Thumbs up and down\nfrom every conversation\nNo user names stored",
+                 "System tables", "SQL per agent: errors, speed\nWho edited a prod agent\nGenie spend by surface"],
+     "notes": n("Where the data comes from. No new tooling to buy.",
+                "Open the Agent Fleet Health dashboard. Fleet Maintenance was healthy for weeks, then its pass rate dropped and thumbs-down climbed five days ago. That history is synthetic and labeled; the Taxi agent is live. Reading every user's conversations is an admin decision for you to make.",
+                ["Live: Agent Fleet Health dashboard", "Seeded demo history is flagged synthetic"],
+                "Signals only help if something acts on them.",
+                "Can we see who asked what? The API allows it; this design deliberately stores only questions and ratings.")},
+    {"id": "automation", "layout": "content_basic", "title": "Alerts and automation", "bullets": True,
+     "body": "Re-test agents automatically when a table or metric view they read changes\nAlerts: pass rate drops, thumbs-down rises, SQL failures, prod edited outside the pipeline\nThumbs-down questions go to a review list; a person decides the fix\nFixes go back through a pull request and the same gate\nMetadata changes go through review too (Context Hub)",
+     "notes": n("The closed loop.",
+                "Live: write to the prod trips table; the re-test job fires about two minutes later and only re-tests agents that read that table. Show the review list. Benchmarks measure; they do not teach, so a person decides whether a thumbs-down becomes a new benchmark or an instruction fix. Two minutes of Context Hub: propose column descriptions for the trips table, approve, apply, re-test.",
+                ["Live: upstream-change trigger", "Live: Context Hub, a reference app you adopt and own"],
+                "One more signal people always ask about: cost.",
+                "Is Context Hub a product? No, it is a reference app you can deploy and own.")},
+    {"id": "cost", "layout": "content_basic", "title": "Cost, honestly", "bullets": True,
+     "body": "Billing shows Genie spend by surface: Genie One, agents, code\nIt does not split spend by individual agent\nWarehouse time per agent is a good stand-in\nBudget alerts can watch Genie spend for the account",
+     "notes": n("Set expectations correctly on cost attribution.",
+                "We looked: billing data tags Genie usage with the surface and channel, not the agent. So per-agent cost is a proxy from query history. Budget alerts are an account-admin setting.",
+                ["system.billing.usage and system.query.history, checked November 2026"],
+                "So where do you start?",
+                "Will per-agent billing come? I would not plan around it; use the warehouse-time view for now.")},
+    {"id": "start", "layout": "content_basic", "title": "Where to start", "bullets": True,
+     "body": "Put one agent and its metric view in a bundle\nAdd the benchmark gate to your pipeline\nStand up the central ops tables and turn on three alerts\nDecide who owns each agent and who approves changes\nThe demo repo has all of it, ready to copy",
+     "notes": n("Concrete next steps, smallest first.",
+                "Start with one agent. The gate is the highest-value single step. The ops layer can come once there are a handful of agents. Ownership is the decision that makes the rest work.",
+                ["Demo repo: bundles, scripts, pipeline template, dashboard"],
+                "Questions.",
+                "Can you share the repo? Yes, we will follow up with it.")},
+    {"id": "closing", "layout": "closing",
+     "notes": n("Close and open questions.", "Thank you. Questions?", ["None"], "Hand off to the next session.",
+                "Who do we contact for help? Your account team.")},
+]
+
+spec = {"title": "Genie Agents in Production", "account": {"name": a.account}, "theme": "light",
+        "forbidden_tokens": a.forbid, "slides": slides}
+pathlib.Path(a.out).write_text(json.dumps(spec, indent=2) + "\n")
+print(f"wrote {a.out}")
+
+# Note (2026-11-09): the 2026 Databricks template has no "Title only" layout, and
+# build-from-spec silently dropped title_only slides. Table slides use content_basic
+# (the builder clears the body placeholder). Table body text rendered white on the light
+# theme; set cell text to #1B3139 after building if that recurs.

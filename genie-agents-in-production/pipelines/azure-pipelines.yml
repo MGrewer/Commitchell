@@ -1,0 +1,54 @@
+# Azure DevOps pipeline for Genie agents (template; shown in the demo, not run).
+# PR -> lint + validate. Merge to main -> dev, then prod behind a benchmark gate.
+# Auth: a service principal via an Azure DevOps service connection with workload
+# identity federation (no secrets). The SP owns prod; users get CAN_RUN only.
+trigger:
+  branches: { include: [main] }
+pr:
+  branches: { include: [main] }
+
+pool: { vmImage: ubuntu-latest }
+
+variables:
+  - group: databricks-genie   # DATABRICKS_HOST, ARM_CLIENT_ID, ARM_TENANT_ID
+
+stages:
+  - stage: validate
+    jobs:
+      - job: lint
+        steps:
+          - template: steps/setup-databricks.yml
+          - script: make lint T=prod
+            displayName: Agent standards + bundle validate
+
+  - stage: dev
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: dev
+        environment: genie-dev
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - template: steps/setup-databricks.yml
+                - script: make deploy context smoke gate T=dev
+                  displayName: Deploy + test in dev
+
+  - stage: prod
+    dependsOn: dev
+    jobs:
+      - deployment: prod
+        environment: genie-prod   # add an approval check on this environment
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - template: steps/setup-databricks.yml
+                - script: make deploy context smoke T=prod
+                  displayName: Deploy bundle, build tables and metric views, smoke test
+                - script: make gate T=prod
+                  displayName: Benchmark gate (Beta API)
+                - script: python3 scripts/register_agents.py
+                  displayName: Register agent for fleet monitoring

@@ -1,0 +1,8 @@
+resources:
+  dashboards:
+    agent_fleet_health:
+      display_name: Agent Fleet Health
+      file_path: ../dashboards/agent_fleet_health.lvdash.json
+      warehouse_id: ${var.warehouse_id}
+      dataset_catalog: ${var.ops_catalog}
+      dataset_schema: ${var.ops_schema}

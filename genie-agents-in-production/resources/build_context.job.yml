@@ -1,0 +1,25 @@
+# Applies the agent's Unity Catalog context (tables, then metric views) on the bundle's
+# warehouse. Run it after deploy: databricks bundle run build_context -t <target>
+resources:
+  jobs:
+    build_context:
+      name: genie-agents-build-context-${bundle.target}
+      tasks:
+        - task_key: tables
+          sql_task:
+            warehouse_id: ${resources.sql_warehouses.genie_wh.id}
+            file:
+              path: ../src/sql/01_tables.sql
+            parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+        - task_key: metric_views
+          depends_on:
+            - task_key: tables
+          sql_task:
+            warehouse_id: ${resources.sql_warehouses.genie_wh.id}
+            file:
+              path: ../src/sql/02_metric_views.sql
+            parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}

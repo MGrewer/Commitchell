@@ -1,0 +1,47 @@
+# Genie agents in production: a Genie agent, its tables and metric view, and its SQL warehouse,
+# promoted dev -> prod. Catalogs and schemas already exist; the bundle moves what lives in them.
+# This demo promotes between two schemas in one catalog. A catalog per environment works
+# the same way: set catalog per target instead.
+# No host or profile here; pass -p <profile> (or use DEFAULT).
+bundle:
+  name: genie_agents_in_production
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Catalog holding the agent's data and metric view.
+  schema:
+    description: Schema holding the agent's data and metric view.
+  consumer_group:
+    description: Group that can chat with the agent (CAN_RUN).
+    default: users
+  ops_catalog:
+    description: Catalog for central Genie ops tables (same for every target). Only the Part 2 scripts use it.
+    default: ""
+  ops_schema:
+    description: Schema for central Genie ops tables (same for every target).
+    default: genie_ops
+  ops_warehouse_id:
+    description: Warehouse for writing central ops tables (Part 2). The agent's own warehouse is a bundle resource.
+    default: ""
+
+targets:
+  dev:
+    mode: development
+    default: true
+    variables:
+      schema: genie_demo_dev
+
+  prod:
+    mode: production
+    # Deploy into a restricted folder. Under /Workspace/Shared, every user inherits
+    # CAN_MANAGE on the agent (seen 2026-11-06), so anyone could edit prod in the UI.
+    # In a real pipeline this is the deploying service principal's folder.
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      schema: genie_demo_prod
+# The catalog, and the ops values (ops_catalog, ops_warehouse_id), go in .databricks/bundle/<target>/variable-overrides.json
+# (git-ignored), or --var.

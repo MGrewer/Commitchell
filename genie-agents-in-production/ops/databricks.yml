@@ -1,0 +1,35 @@
+# Genie fleet operations: one bundle, owned by the platform team, for every agent.
+# Agent teams own their agent bundles (../databricks.yml); this bundle watches all of them.
+bundle:
+  name: genie_fleet_ops
+
+include:
+  - resources/*.yml
+
+# Ship the shared helper scripts from the repo root.
+sync:
+  paths:
+    - .
+    - ../scripts
+
+variables:
+  warehouse_id:
+    description: SQL warehouse for ops queries, alerts and the dashboard.
+  ops_catalog:
+    description: Catalog for the central ops tables.
+  ops_schema:
+    description: Schema for the central ops tables.
+    default: genie_ops
+  upstream_tables:
+    description: Source tables whose changes re-trigger benchmarks (comma-separated, from the registry).
+  upstream_trigger_pause:
+    description: PAUSED or UNPAUSED for the re-benchmark-on-upstream-change trigger.
+    default: PAUSED
+
+targets:
+  prod:
+    mode: production
+    default: true
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    # Per-deployment values: .databricks/bundle/prod/variable-overrides.json (git-ignored), or --var.

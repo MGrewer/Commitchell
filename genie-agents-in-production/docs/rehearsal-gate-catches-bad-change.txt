@@ -1,0 +1,17 @@
+Files: 12 uploaded, 3 deleted
+Resources: 0 created, 1 changed, 8 deleted, 1 unchanged
+Benchmark gate: target=dev space=<space-id> threshold=80%
+  [FAIL  ] What is the total revenue?
+  [PASS  ] What is the average trip distance in miles?
+  [PASS  ] What is the average fare?
+  [PASS  ] How many trips are there in total?
+  [FAIL  ] What is the busiest dropoff ZIP?
+  [FAIL  ] How many trips were there per day?
+  [FAIL  ] What are the top 5 pickup ZIPs by revenue?
+  [PASS  ] What is the average fare by pickup hour?
+  [FAIL  ] Which hour of the day has the most trips?
+  [PASS  ] How many trips started in ZIP 10001?
+Pass rate 50% (5/10), 0 need review
+GATE FAILED: pass rate below threshold
+
+[exited with code 0]
